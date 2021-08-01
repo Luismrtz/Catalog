@@ -1,4 +1,5 @@
-﻿using Catalog.Entities;
+﻿using Catalog.DataTransObj;
+using Catalog.Entities;
 using Catalog.Repositories;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -15,35 +16,70 @@ namespace Catalog.Controllers
     //controllerbase turns into a controller class
     public class ItemsController : ControllerBase
     {
-        private readonly InMemItemsRepository repository;
+        private readonly IItemsRepository repository;
 
-        public ItemsController()
+        public ItemsController(IItemsRepository repository) //constructor links params to instance variable "repository"
         {
-            repository = new InMemItemsRepository();
+            this.repository = repository; // instance variable = constructor's paramater
         }
         // Gets ALL items
         [HttpGet]
-        public IEnumerable<Item> GetItems()
+        public IEnumerable<ItemDto> GetItems()
         {
-            var items = repository.GetItems();
+            var items = repository.GetItems().Select(item => item.AsDto());
             return items;
         }
+
+
         // need to provide a template to get the ID. 
         [HttpGet("{id}")]
-        
-
         //ActionResult<wrapped method name> allows us to return MORE than one type from this method
-        public ActionResult<Item> GetItem(Guid id)
+        public ActionResult<ItemDto> GetItem(Guid id)
         {
             var item = repository.GetItem(id);
 
             // to create a proper status-code(error) for NOT FOUND 
-               if(item is null)
+            if (item is null)
             {
                 return NotFound();
             }
 
-            return Ok(item);
+            return Ok(item.AsDto());
+        }
+        // POST /items
+        [HttpPost]
+        public ActionResult<ItemDto> CreateItem(CreateItemDto itemDto)
+        {
+            Item item = new()
+            {
+                Id = Guid.NewGuid(),
+                Name = itemDto.Name,
+                Price = itemDto.Price,
+                CreatedDate = DateTimeOffset.UtcNow
+            };
+
+            repository.CreateItem(item);
+
+            return CreatedAtAction(nameof(GetItem), new { id = item.Id }, item.AsDto());
+        }
+        // PUT /items
+        [HttpPut("{id}")]
+        public ActionResult UpdateItem(Guid id, UpdateItemDto itemDto) {
+            var existingItem = repository.GetItem(id);
+
+            if (existingItem is null)
+            {
+                return NotFound();
+            }
+            //record type:"with- expression" creates an immutable copy of existingItem with the properties we listed to modify it
+            Item updatedItem = existingItem with
+            {
+                Name = itemDto.Name,
+                Price = itemDto.Price
+            };
+
+            repository.UpdateItem(updatedItem);
+            return NoContent();
         }
     }
 }
